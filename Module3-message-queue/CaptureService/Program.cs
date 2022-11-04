@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Infrastructure;
+using Microsoft.Extensions.Configuration;
 using ModelObjects;
 using Services;
 
@@ -21,11 +22,16 @@ namespace CaptureService
             Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
-                    services.AddSingleton<IFileReaderService, FileReaderService>();
-                    services.AddSingleton<IMessageQueueProvider, MessageQueueProvider>();
-                    services.AddHostedService<Worker>();
                     services.Configure<CaptureServiceOptions>(
                         hostContext.Configuration.GetSection(CaptureServiceOptions.CaptureServiceConfiguration));
+                    services.AddSingleton<IFileReaderService, FileReaderService>();
+
+                    var configOptions = new CaptureServiceOptions();
+                    hostContext.Configuration.GetSection(CaptureServiceOptions.CaptureServiceConfiguration)
+                        .Bind(configOptions);
+
+                    services.AddSingleton(new MessageQueueClient(configOptions.QueueName, configOptions.MessageQueueConnectionString));
+                    services.AddHostedService<Worker>();
                 });
     }
 }

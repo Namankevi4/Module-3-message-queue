@@ -11,5 +11,6 @@ namespace ModelObjects
         public int SequenceNumber { get; set; }
         public long FileSize { get; set; }
         public byte[] Body { get; set; }
+        public int BufferSize { get; set; }
     }
 }

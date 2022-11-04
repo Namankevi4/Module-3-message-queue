@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Infrastructure;
+using Microsoft.Extensions.Configuration;
 using ModelObjects;
 using Services;
 
@@ -21,11 +22,16 @@ namespace ProcessingFileService
             Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
-                    services.AddSingleton<IFileReaderService, FileReaderService>();
-                    services.AddSingleton<IMessageQueueProvider, MessageQueueProvider>();
-                    services.AddHostedService<Worker>();
                     services.Configure<ProcessingServiceOptions>(
                         hostContext.Configuration.GetSection(ProcessingServiceOptions.ProcessingServiceConfiguration));
+                    services.AddSingleton<IFileReaderService, FileReaderService>(); ;
+                    services.AddHostedService<Worker>();
+
+                    var configOptions = new ProcessingServiceOptions();
+                    hostContext.Configuration.GetSection(ProcessingServiceOptions.ProcessingServiceConfiguration)
+                        .Bind(configOptions);
+
+                    services.AddSingleton(new MessageQueueClient(configOptions.QueueName, configOptions.MessageQueueConnectionString));
                 });
     }
 }

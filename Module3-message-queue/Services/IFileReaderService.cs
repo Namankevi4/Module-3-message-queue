@@ -8,7 +8,7 @@ namespace Services
 {
     public interface IFileReaderService
     {
-        Task ReadFileByPortionAsync(int bufferSize, string filePath, Func<FilePortionModel, Task> portionHandler);
+        IEnumerable<FilePortionModel> ReadFileByPortion(int bufferSize, string filePath);
         void WriteFileByPortion(int bufferSize, string folderPath, FilePortionModel fileModel);
     }
 }
