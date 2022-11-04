@@ -12,14 +12,13 @@ namespace Services
     {
         private ConcurrentDictionary<string, object> _fileAlreadyInWritingState = new ConcurrentDictionary<string, object>();
 
-        public async Task ReadFileByPortionAsync(int bufferSize, string filePath,
-            Func<FilePortionModel, Task> portionHandler)
+        public IEnumerable<FilePortionModel> ReadFileByPortion(int bufferSize, string filePath)
         {
             Guid fileId = Guid.NewGuid();
             string fileName = Path.GetFileName(filePath);
             int sequenceNumber = 0;
 
-            await using (FileStream fs = File.OpenRead(filePath))
+             using (FileStream fs = File.OpenRead(filePath))
             {
                 using (BinaryReader binaryReader = new BinaryReader(fs))
                 {
@@ -32,10 +31,11 @@ namespace Services
                             FileName = fileName,
                             SequenceNumber = sequenceNumber++,
                             Body = fileData,
-                            FileSize = binaryReader.BaseStream.Length
+                            FileSize = binaryReader.BaseStream.Length,
+                            BufferSize = bufferSize
                         };
 
-                        await portionHandler(filePortionModel);
+                        yield return filePortionModel;
                     }
                 }
             }

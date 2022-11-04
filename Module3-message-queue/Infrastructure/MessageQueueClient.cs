@@ -25,9 +25,10 @@ namespace Infrastructure
 
             _client = new ServiceBusClient(connStr, clientOptions);
             _sender = _client.CreateSender(queueName);
+            _processor = _client.CreateProcessor(this._queueName, new ServiceBusProcessorOptions());
         }
 
-        public async Task CreateProcessorMessage(Func<BinaryData, Task> messageHandler,
+        public async Task RegisterMesageHandlers(Func<BinaryData, Task> messageHandler,
             Func<Exception, Task> errorHandler)
         {
             async Task MessageHandler(ProcessMessageEventArgs args)
@@ -44,13 +45,20 @@ namespace Infrastructure
                 await errorHandler(args.Exception);
             }
 
-            _processor = _client.CreateProcessor(this._queueName, new ServiceBusProcessorOptions());
             _processor.ProcessMessageAsync += MessageHandler;
             _processor.ProcessErrorAsync += ErrorHandler;
+        }
 
+        public async Task StartProcessingAsync()
+        {
             await _processor.StartProcessingAsync();
         }
-        
+
+        public async Task StopProcessingAsync()
+        {
+            await _processor.StopProcessingAsync();
+        }
+
         public async Task SendMessage(FilePortionModel message)
         {
             BinaryData body = new BinaryData(message);
@@ -62,10 +70,7 @@ namespace Infrastructure
         {
             await _sender.DisposeAsync();
             await _client.DisposeAsync();
-            if (_processor != null)
-            {
-                await _processor.DisposeAsync();
-            }
+            await _processor.DisposeAsync();
         }
     }
 }

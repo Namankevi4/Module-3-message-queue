@@ -19,56 +19,52 @@ namespace ProcessingFileService
         private readonly ILogger<Worker> _logger;
         private readonly IOptions<ProcessingServiceOptions> _options;
         private readonly IFileReaderService _fileReaderService;
-        private readonly IMessageQueueProvider _messageQueueProvider;
-        private ConcurrentDictionary<string, int> _fileAlreadyInDownloadState = new ConcurrentDictionary<string, int>();
+        private readonly ConcurrentDictionary<string, int> _fileAlreadyInDownloadState = new ConcurrentDictionary<string, int>();
+        private readonly MessageQueueClient _client;
 
-        public Worker(ILogger<Worker> logger, IOptions<ProcessingServiceOptions> options, IFileReaderService fileReaderService, IMessageQueueProvider messageQueueProvider)
+        public Worker(ILogger<Worker> logger, IOptions<ProcessingServiceOptions> options, IFileReaderService fileReaderService, MessageQueueClient client)
         {
+            this._client = client;
+            this._client.RegisterMesageHandlers(MessageHandler, ErrorHandler).GetAwaiter().GetResult();
+            this._client.StartProcessingAsync().GetAwaiter().GetResult();
+
             _logger = logger;
             _options = options;
             _fileReaderService = fileReaderService;
-            _messageQueueProvider = messageQueueProvider;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            Task MessageHandler(BinaryData body)
-            {
-                var fileModel = body.ToObjectFromJson<FilePortionModel>();
-
-                if (_fileAlreadyInDownloadState.TryAdd(fileModel.FileName, 0))
-                {
-                    Console.WriteLine($"Download file {fileModel.FileName} started");
-                }
-
-                _fileReaderService.WriteFileByPortion(_options.Value.BufferSize, _options.Value.OutputFolderPath,
-                    fileModel);
-                _fileAlreadyInDownloadState[fileModel.FileName]++;
-
-                if (_fileAlreadyInDownloadState[fileModel.FileName] == (fileModel.FileSize / _options.Value.BufferSize) + 1)
-                {
-                    Console.WriteLine($"Download file {fileModel.FileName} completed");
-                }
-                return Task.CompletedTask;
-            }
-
-            Task ErrorHandler(Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                return Task.CompletedTask;
-            }
-
-            var client = _messageQueueProvider.CreateClient(_options.Value.QueueName, _options.Value.MessageQueueConnectionString);
-
             while (!stoppingToken.IsCancellationRequested)
             {
-                await client.CreateProcessorMessage(MessageHandler, ErrorHandler);
-
                 await Task.Delay(10000, stoppingToken);
             }
+        }
 
-            await client.DisposeAsync();
+        private Task MessageHandler(BinaryData body)
+        {
+            var fileModel = body.ToObjectFromJson<FilePortionModel>();
 
+            if (_fileAlreadyInDownloadState.TryAdd(fileModel.FileName, 0))
+            {
+                _logger.LogInformation($"Download file {fileModel.FileName} started");
+            }
+
+            _fileReaderService.WriteFileByPortion(fileModel.BufferSize, _options.Value.OutputFolderPath,
+                fileModel);
+            _fileAlreadyInDownloadState[fileModel.FileName]++;
+
+            if (_fileAlreadyInDownloadState[fileModel.FileName] == Math.Ceiling((decimal)(fileModel.FileSize / fileModel.BufferSize)))
+            {
+                _logger.LogInformation($"Download file {fileModel.FileName} completed");
+            }
+            return Task.CompletedTask;
+        }
+
+        private Task ErrorHandler(Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return Task.CompletedTask;
         }
     }
 }
